@@ -1,0 +1,253 @@
+{
+  "info": {
+    "name": "LifeLine — Week 1 API",
+    "description": "Auth, roles, and core model endpoints (Donor, Hospital, Individual Patient registration + hospital-managed patient requests).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://127.0.0.1:8000" },
+    { "key": "donor_access", "value": "" },
+    { "key": "hospital_access", "value": "" },
+    { "key": "patient_access", "value": "" },
+    { "key": "hospital_id", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "1. Register Donor",
+      "event": [{
+        "listen": "test",
+        "script": { "exec": [
+          "if (pm.response.code === 201) {",
+          "  pm.collectionVariables.set('donor_access', pm.response.json().access);",
+          "}",
+          "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+          "pm.test('Donor status is eligible', () => pm.expect(pm.response.json().status).to.eql('eligible'));"
+        ]}
+      }],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{base_url}}/api/donors/register/",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"ahmed_donor\",\n  \"email\": \"ahmed@example.com\",\n  \"password\": \"testpass123\",\n  \"cnic\": \"12345-1234567-1\",\n  \"phone_number\": \"03001234567\",\n  \"blood_group\": \"O-\",\n  \"city\": \"Lahore\",\n  \"age\": 28,\n  \"weight_kg\": 70\n}"
+        }
+      }
+    },
+    {
+      "name": "2. Register Donor - Invalid CNIC (expect 400)",
+      "event": [{
+        "listen": "test",
+        "script": { "exec": [
+          "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+          "pm.test('Error mentions cnic', () => pm.expect(pm.response.text()).to.include('cnic'));"
+        ]}
+      }],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{base_url}}/api/donors/register/",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"bad_cnic_donor\",\n  \"email\": \"bad@example.com\",\n  \"password\": \"testpass123\",\n  \"cnic\": \"not-a-cnic\",\n  \"phone_number\": \"03001234567\",\n  \"blood_group\": \"O-\",\n  \"city\": \"Lahore\",\n  \"age\": 28,\n  \"weight_kg\": 70\n}"
+        }
+      }
+    },
+    {
+      "name": "3. Register Donor - Underweight (expect disqualified)",
+      "event": [{
+        "listen": "test",
+        "script": { "exec": [
+          "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+          "pm.test('Donor is disqualified', () => pm.expect(pm.response.json().status).to.eql('disqualified'));"
+        ]}
+      }],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{base_url}}/api/donors/register/",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"light_donor\",\n  \"email\": \"light@example.com\",\n  \"password\": \"testpass123\",\n  \"cnic\": \"35202-1112223-4\",\n  \"phone_number\": \"03001112222\",\n  \"blood_group\": \"AB+\",\n  \"city\": \"Karachi\",\n  \"age\": 22,\n  \"weight_kg\": 40\n}"
+        }
+      }
+    },
+    {
+      "name": "4. Login (any role)",
+      "event": [{
+        "listen": "test",
+        "script": { "exec": [
+          "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+          "pm.test('Access token present', () => pm.expect(pm.response.json().access).to.exist);"
+        ]}
+      }],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{base_url}}/api/auth/login/",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"ahmed_donor\",\n  \"password\": \"testpass123\"\n}"
+        }
+      }
+    },
+    {
+      "name": "5. Get Current User (/me/)",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{donor_access}}" }],
+        "url": "{{base_url}}/api/auth/me/"
+      }
+    },
+    {
+      "name": "6. Get/Update Donor Profile (availability toggle)",
+      "event": [{
+        "listen": "test",
+        "script": { "exec": [
+          "pm.test('Status is 200', () => pm.response.to.have.status(200));"
+        ]}
+      }],
+      "request": {
+        "method": "PATCH",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{donor_access}}" }
+        ],
+        "url": "{{base_url}}/api/donors/me/",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"is_available\": false,\n  \"travel_radius_km\": 20\n}"
+        }
+      }
+    },
+    {
+      "name": "7. Register Hospital",
+      "event": [{
+        "listen": "test",
+        "script": { "exec": [
+          "if (pm.response.code === 201) {",
+          "  pm.collectionVariables.set('hospital_access', pm.response.json().access);",
+          "  pm.collectionVariables.set('hospital_id', pm.response.json().hospital_id);",
+          "}",
+          "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+          "pm.test('is_verified is false initially', () => pm.expect(pm.response.json().is_verified).to.eql(false));"
+        ]}
+      }],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{base_url}}/api/hospitals/register/",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Bahria International Hospital\",\n  \"official_address\": \"DHA, Lahore\",\n  \"city\": \"Lahore\",\n  \"license_number\": \"PB-HOSP-001\",\n  \"official_contact\": \"04211112222\",\n  \"official_email\": \"info@bahria.example.com\",\n  \"admin_username\": \"bahria_admin\",\n  \"admin_email\": \"admin@bahria.example.com\",\n  \"admin_password\": \"hosppass123\",\n  \"admin_cnic\": \"35202-9876543-2\",\n  \"admin_phone_number\": \"03211234567\"\n}"
+        }
+      }
+    },
+    {
+      "name": "8. Register Individual Patient + Request",
+      "event": [{
+        "listen": "test",
+        "script": { "exec": [
+          "if (pm.response.code === 201) {",
+          "  pm.collectionVariables.set('patient_access', pm.response.json().access);",
+          "}",
+          "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+          "pm.test('units_remaining equals units_required', () => pm.expect(pm.response.json().units_remaining).to.eql(2));"
+        ]}
+      }],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{base_url}}/api/patients/register/",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"sara_patient\",\n  \"email\": \"sara@example.com\",\n  \"password\": \"patientpass123\",\n  \"cnic\": \"35201-1122334-5\",\n  \"phone_number\": \"03334445555\",\n  \"patient_name\": \"Sara Khan\",\n  \"blood_group\": \"A+\",\n  \"units_required\": 2,\n  \"hospital_name_freetext\": \"Services Hospital Lahore\",\n  \"urgency_level\": \"high\"\n}"
+        }
+      }
+    },
+    {
+      "name": "9. Hospital Directory (before verification -> empty)",
+      "event": [{
+        "listen": "test",
+        "script": { "exec": [
+          "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+          "pm.test('List is empty pre-verification', () => pm.expect(pm.response.json().length).to.eql(0));"
+        ]}
+      }],
+      "request": { "method": "GET", "url": "{{base_url}}/api/hospitals/" }
+    },
+    {
+      "name": "10. [Manual step] Verify hospital via Django Admin",
+      "request": {
+        "method": "GET",
+        "url": "{{base_url}}/admin/hospitals/hospital/",
+        "description": "Not a real test call — log into /admin/ as a superuser, open Hospitals, select the pending hospital, and run the 'Verify selected hospitals' action before running request #11."
+      }
+    },
+    {
+      "name": "11. Hospital Directory (after verification)",
+      "event": [{
+        "listen": "test",
+        "script": { "exec": [
+          "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+          "pm.test('Bahria hospital now listed', () => pm.expect(pm.response.text()).to.include('Bahria'));"
+        ]}
+      }],
+      "request": { "method": "GET", "url": "{{base_url}}/api/hospitals/" }
+    },
+    {
+      "name": "12. Hospital Adds Patient Request",
+      "event": [{
+        "listen": "test",
+        "script": { "exec": [
+          "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+          "pm.test('Response includes contact (hospital-side only)', () => pm.expect(pm.response.json().patient_contact).to.exist);"
+        ]}
+      }],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{hospital_access}}" }
+        ],
+        "url": "{{base_url}}/api/patients/hospital-requests/",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"patient_name\": \"Ali Raza\",\n  \"patient_contact\": \"03009998888\",\n  \"blood_group\": \"B+\",\n  \"units_required\": 3,\n  \"ward_location\": \"ICU-2\",\n  \"urgency_level\": \"critical\"\n}"
+        }
+      }
+    },
+    {
+      "name": "13. List My Hospital's Requests (staff dashboard)",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{hospital_access}}" }],
+        "url": "{{base_url}}/api/patients/hospital-requests/"
+      }
+    },
+    {
+      "name": "14. Public Hospital Patient List (contact/medical hidden)",
+      "event": [{
+        "listen": "test",
+        "script": { "exec": [
+          "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+          "pm.test('Response does NOT include patient_contact', () => pm.expect(pm.response.text()).to.not.include('patient_contact'));",
+          "pm.test('Response does NOT include patient_name', () => pm.expect(pm.response.text()).to.not.include('Ali Raza'));"
+        ]}
+      }],
+      "request": {
+        "method": "GET",
+        "url": "{{base_url}}/api/patients/public/hospital/{{hospital_id}}/"
+      }
+    },
+    {
+      "name": "15. Hospital Staff Tries to Access Another Hospital's Data (expect 403/empty)",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{patient_access}}" }],
+        "url": "{{base_url}}/api/patients/hospital-requests/",
+        "description": "Uses a non-hospital-staff token on purpose. Expected: 403 Forbidden, since IsHospitalStaff should reject this role."
+      }
+    }
+  ]
+}

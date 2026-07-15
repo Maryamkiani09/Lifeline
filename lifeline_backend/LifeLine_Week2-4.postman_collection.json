@@ -1,0 +1,155 @@
+{
+  "info": {
+    "name": "LifeLine — Week 2-4 API",
+    "description": "Matching engine + broadcast (Wk2), chat history (Wk3), donation confirmation + cancellation (Wk4). Run the Week 1 collection first — this one assumes donors/hospitals/patients already exist, or creates fresh ones as needed.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://127.0.0.1:8000" },
+    { "key": "donor_near_access", "value": "" },
+    { "key": "donor_far_access", "value": "" },
+    { "key": "patient_access", "value": "" },
+    { "key": "match_id", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "1. Register donor_near (O-, Lahore, will match)",
+      "event": [{ "listen": "test", "script": { "exec": [
+        "if (pm.response.code === 201) { pm.collectionVariables.set('donor_near_access', pm.response.json().access); }",
+        "pm.test('Status 201', () => pm.response.to.have.status(201));"
+      ]}}],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{base_url}}/api/donors/register/",
+        "body": { "mode": "raw", "raw": "{\n  \"username\": \"donor_near\",\n  \"email\": \"near@example.com\",\n  \"password\": \"testpass123\",\n  \"cnic\": \"11111-1111111-1\",\n  \"phone_number\": \"03001111111\",\n  \"blood_group\": \"O-\",\n  \"city\": \"Lahore\",\n  \"age\": 30,\n  \"weight_kg\": 75,\n  \"latitude\": 31.5204,\n  \"longitude\": 74.3587,\n  \"travel_radius_km\": 20\n}" }
+      }
+    },
+    {
+      "name": "2. Register donor_far (O-, Multan, small radius -> excluded)",
+      "event": [{ "listen": "test", "script": { "exec": [
+        "if (pm.response.code === 201) { pm.collectionVariables.set('donor_far_access', pm.response.json().access); }",
+        "pm.test('Status 201', () => pm.response.to.have.status(201));"
+      ]}}],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{base_url}}/api/donors/register/",
+        "body": { "mode": "raw", "raw": "{\n  \"username\": \"donor_far\",\n  \"email\": \"far@example.com\",\n  \"password\": \"testpass123\",\n  \"cnic\": \"22222-2222222-2\",\n  \"phone_number\": \"03002222222\",\n  \"blood_group\": \"O-\",\n  \"city\": \"Multan\",\n  \"age\": 30,\n  \"weight_kg\": 75,\n  \"latitude\": 30.1575,\n  \"longitude\": 71.5249,\n  \"travel_radius_km\": 10\n}" }
+      }
+    },
+    {
+      "name": "3. [Manual step] Verify both donors in /admin/",
+      "request": {
+        "method": "GET",
+        "url": "{{base_url}}/admin/donors/donor/",
+        "description": "Log into /admin/, open Donors, select donor_near and donor_far, run 'Mark selected donors as CNIC-verified'. Required before matching will pick them up (FR-1.4)."
+      }
+    },
+    {
+      "name": "4. Register patient near donor_near (AB+, needs O- via universal donor)",
+      "event": [{ "listen": "test", "script": { "exec": [
+        "if (pm.response.code === 201) { pm.collectionVariables.set('patient_access', pm.response.json().access); }",
+        "pm.test('Status 201', () => pm.response.to.have.status(201));"
+      ]}}],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{base_url}}/api/patients/register/",
+        "body": { "mode": "raw", "raw": "{\n  \"username\": \"patient_ab\",\n  \"email\": \"patientab@example.com\",\n  \"password\": \"patientpass123\",\n  \"cnic\": \"33333-3333333-3\",\n  \"phone_number\": \"03003333333\",\n  \"patient_name\": \"Fatima Noor\",\n  \"blood_group\": \"AB+\",\n  \"units_required\": 2,\n  \"hospital_name_freetext\": \"Services Hospital Lahore\",\n  \"urgency_level\": \"critical\",\n  \"latitude\": 31.5497,\n  \"longitude\": 74.3436\n}" },
+        "description": "This POST triggers Week 2's auto-broadcast signal immediately on save. donor_near (O-, within radius) should get a BROADCAST match; donor_far should NOT (radius too small)."
+      }
+    },
+    {
+      "name": "5. donor_near: My Broadcasts (contact should be HIDDEN)",
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('Status 200', () => pm.response.to.have.status(200));",
+        "pm.test('At least one broadcast', () => pm.expect(pm.response.json().length).to.be.above(0));",
+        "pm.test('No patient_contact leaked', () => pm.expect(pm.response.text()).to.not.include('patient_contact'));",
+        "pm.test('No patient name leaked', () => pm.expect(pm.response.text()).to.not.include('Fatima Noor'));",
+        "if (pm.response.json().length > 0) { pm.collectionVariables.set('match_id', pm.response.json()[0].id); }"
+      ]}}],
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{donor_near_access}}" }],
+        "url": "{{base_url}}/api/matches/my-broadcasts/"
+      }
+    },
+    {
+      "name": "6. donor_far: My Broadcasts (should be EMPTY — out of radius)",
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('Status 200', () => pm.response.to.have.status(200));",
+        "pm.test('Empty list', () => pm.expect(pm.response.json().length).to.eql(0));"
+      ]}}],
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{donor_far_access}}" }],
+        "url": "{{base_url}}/api/matches/my-broadcasts/"
+      }
+    },
+    {
+      "name": "7. donor_near: Accept Match (contact SHOULD now appear)",
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('Status 200', () => pm.response.to.have.status(200));",
+        "pm.test('Contact revealed', () => pm.expect(pm.response.json().patient_contact).to.exist);",
+        "pm.test('Status accepted', () => pm.expect(pm.response.json().status).to.eql('accepted'));"
+      ]}}],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Authorization", "value": "Bearer {{donor_near_access}}" }],
+        "url": "{{base_url}}/api/matches/{{match_id}}/accept/"
+      }
+    },
+    {
+      "name": "8. Chat History (should be empty so far)",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{donor_near_access}}" }],
+        "url": "{{base_url}}/api/chat/{{match_id}}/history/"
+      }
+    },
+    {
+      "name": "9. Patient confirms donation (1 of 2 — should NOT complete)",
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('Status 200', () => pm.response.to.have.status(200));",
+        "pm.test('Not yet completed', () => pm.expect(pm.response.json().status).to.not.eql('completed'));",
+        "pm.test('patient_confirmed true', () => pm.expect(pm.response.json().patient_confirmed).to.eql(true));"
+      ]}}],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Authorization", "value": "Bearer {{patient_access}}" }],
+        "url": "{{base_url}}/api/matches/{{match_id}}/confirm/"
+      }
+    },
+    {
+      "name": "10. Donor confirms donation (2 of 2 — SHOULD auto-complete)",
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('Status 200', () => pm.response.to.have.status(200));",
+        "pm.test('Completed', () => pm.expect(pm.response.json().status).to.eql('completed'));"
+      ]}}],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Authorization", "value": "Bearer {{donor_near_access}}" }],
+        "url": "{{base_url}}/api/matches/{{match_id}}/confirm/"
+      }
+    },
+    {
+      "name": "11. [Manual check] Donor profile now cooling_down",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{donor_near_access}}" }],
+        "url": "{{base_url}}/api/donors/me/",
+        "description": "Confirm status is 'cooling_down', next_eligible_date is ~90 days out, and donation_count incremented (FR-6.3)."
+      }
+    },
+    {
+      "name": "12. Cancel Match (only works BEFORE confirm completes it — use a fresh accepted match to test this properly)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Authorization", "value": "Bearer {{donor_near_access}}" }],
+        "url": "{{base_url}}/api/matches/{{match_id}}/cancel/",
+        "description": "Will return 409 here since match #{{match_id}} is already COMPLETED from step 10. To actually test cancellation + backup reassignment (UC-9), repeat steps 1-7 with a NEW patient request and two donors, then cancel before confirming."
+      }
+    }
+  ]
+}
