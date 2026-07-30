@@ -1,25 +1,40 @@
-from django.shortcuts import get_object_or_404
-from rest_framework import generics, permissions
-from rest_framework.exceptions import PermissionDenied
-from matches.models import DonationMatch
-from matches.permissions import IsPartyToMatch
-from .models import ChatMessage
-from .serializers import ChatMessageSerializer
+from django.shortcuts import render
 
+# Create your views here.
+from django.shortcuts import render, get_object_or_404, redirect
+from django.contrib.auth.decorators import login_required
+from django.http import JsonResponse
+from .models import ChatRoom, Message
 
-class ChatHistoryView(generics.ListAPIView):
-    """GET /api/chat/<match_id>/history/ — loads existing messages when a
-    user opens a chat thread; the WebSocket (see consumers.py) handles
-    everything sent after that point live."""
+@login_required
+def chat_room(request, room_id):
+    room = get_object_or_404(ChatRoom, id=room_id)
+    messages = room.messages.all().order_by('timestamp')
+    return render(request, 'chat/room.html', {'room': room, 'messages': messages})
 
-    serializer_class = ChatMessageSerializer
-    permission_classes = [permissions.IsAuthenticated]
+@login_required
+def create_room(request):
+    if request.method == 'POST':
+        name = request.POST.get('name')
+        if name:
+            room = ChatRoom.objects.create(name=name, created_by=request.user)
+            return redirect('chat_room', room_id=room.id)
+    return render(request, 'chat/create_room.html')
 
-    def get_match(self):
-        match = get_object_or_404(DonationMatch, id=self.kwargs["match_id"])
-        if not IsPartyToMatch().has_object_permission(self.request, self, match):
-            raise PermissionDenied("You are not a party to this match.")
-        return match
-
-    def get_queryset(self):
-        return ChatMessage.objects.filter(match=self.get_match())
+@login_required
+def send_message(request, room_id):
+    if request.method == 'POST':
+        content = request.POST.get('content')
+        room = get_object_or_404(ChatRoom, id=room_id)
+        message = Message.objects.create(
+            room=room,
+            user=request.user,
+            content=content
+        )
+        return JsonResponse({
+            'status': 'success',
+            'user': request.user.username,
+            'content': content,
+            'timestamp': message.timestamp.strftime('%Y-%m-%d %H:%M:%S')
+        })
+    return JsonResponse({'status': 'error'}, status=400)

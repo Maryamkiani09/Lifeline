@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Chat Room</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+</head>
+<body>
+    <h1>{{ room.name }}</h1>
+    <div id="messages">
+        {% for msg in messages %}
+            <p><strong>{{ msg.user.username }}:</strong> {{ msg.content }} <small>{{ msg.timestamp }}</small></p>
+        {% endfor %}
+    </div>
+    
+    <form id="message-form">
+        {% csrf_token %}
+        <input type="text" id="message-input" placeholder="Type a message..." required>
+        <button type="submit">Send</button>
+    </form>
+
+    <script>
+        $('#message-form').submit(function(e) {
+            e.preventDefault();
+            var content = $('#message-input').val();
+            $.post('{% url "send_message" room.id %}', {
+                'content': content,
+                'csrfmiddlewaretoken': '{{ csrf_token }}'
+            }, function(data) {
+                if (data.status === 'success') {
+                    $('#messages').append(
+                        `<p><strong>${data.user}:</strong> ${data.content} <small>${data.timestamp}</small></p>`
+                    );
+                    $('#message-input').val('');
+                }
+            });
+        });
+    </script>
+</body>
+</html>

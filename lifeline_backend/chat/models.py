@@ -1,19 +1,22 @@
-from django.conf import settings
 from django.db import models
 
+# Create your models here.
+from django.db import models
+from django.contrib.auth.models import User
 
-class ChatMessage(models.Model):
-    """FR-5.1: donor and patient (or hospital staff) chat once a match exists."""
-
-    match = models.ForeignKey(
-        "matches.DonationMatch", on_delete=models.CASCADE, related_name="messages"
-    )
-    sender = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-    content = models.TextField(max_length=2000)
-    timestamp = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        ordering = ["timestamp"]
+class ChatRoom(models.Model):
+    name = models.CharField(max_length=100)
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE)
 
     def __str__(self):
-        return f"[{self.match_id}] {self.sender.username}: {self.content[:40]}"
+        return self.name
+
+class Message(models.Model):
+    room = models.ForeignKey(ChatRoom, on_delete=models.CASCADE, related_name='messages')
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    content = models.TextField()
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.user.username}: {self.content[:20]}"

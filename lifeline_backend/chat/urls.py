@@ -1,6 +1,9 @@
-from django.urls import path
-from .views import ChatHistoryView
+from django.urls import include, path
+from . import views
 
 urlpatterns = [
-    path("<int:match_id>/history/", ChatHistoryView.as_view(), name="chat_history"),
+    path('room/<int:room_id>/', views.chat_room, name='chat_room'),
+    path('create/', views.create_room, name='create_room'),
+    path('send/<int:room_id>/', views.send_message, name='send_message'),
+    path('chat/', include('chat.urls')),
 ]

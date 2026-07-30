@@ -1,18 +1,26 @@
+"""
+ASGI config for config project.
+
+It exposes the ASGI callable as a module-level variable named ``application``.
+
+For more information on this file, see
+https://docs.djangoproject.com/en/6.0/howto/deployment/asgi/
+"""
+
 import os
 from django.core.asgi import get_asgi_application
+from channels.routing import ProtocolTypeRouter, URLRouter
+from channels.auth import AuthMiddlewareStack
+import chat.routing
 
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
-django_asgi_app = get_asgi_application()
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
 
-# Imports below must come AFTER get_asgi_application() so Django's app
-# registry is fully populated before chat.routing imports any models.
-from channels.routing import ProtocolTypeRouter, URLRouter  # noqa: E402
-from accounts.channels_auth import JWTAuthMiddleware  # noqa: E402
-import chat.routing  # noqa: E402
-
+# This is the key change - we need to wrap the application with ProtocolTypeRouter
 application = ProtocolTypeRouter({
-    "http": django_asgi_app,
-    "websocket": JWTAuthMiddleware(
-        URLRouter(chat.routing.websocket_urlpatterns)
+    "http": get_asgi_application(),  # Handle HTTP requests
+    "websocket": AuthMiddlewareStack(  # Handle WebSocket connections
+        URLRouter(
+            chat.routing.websocket_urlpatterns  # WebSocket routes from chat app
+        )
     ),
 })
